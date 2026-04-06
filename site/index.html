@@ -1,0 +1,2591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TideTrack — Know where your time actually goes.</title>
+  <meta name="description" content="The browser extension that passively tracks your study time vs distractions. AI-powered coaching, beautiful analytics, and total privacy.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400&family=DM+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    /* ══════════════════════════════════════════════════════════════════
+       RESET & TOKENS
+       ══════════════════════════════════════════════════════════════════ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+
+    :root {
+      --bg:         #f5f7fb;
+      --surface:    #ffffff;
+      --surface-2:  #edf1f8;
+      --ink:        #0a1628;
+      --ink-2:      #3d5068;
+      --ink-3:      #8299b0;
+      --accent:     #2b7cd4;
+      --accent-light: #5badee;
+      --accent-glow: rgba(91,173,238,0.25);
+      --accent-bg:  #e8f2fc;
+      --warn:       #e05542;
+      --amber:      #d97706;
+      --green:      #22a06b;
+      --border:     #d8e2ed;
+      --radius:     12px;
+      --radius-lg:  20px;
+
+      --ocean-1: #020b18;
+      --ocean-2: #0a1f3d;
+      --ocean-3: #0e3460;
+      --ocean-4: #1565a0;
+      --ocean-5: #2196c8;
+    }
+
+    body {
+      font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      font-size: 16px;
+      line-height: 1.6;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ══════════════════════════════════════════════════════════════════
+       UTILITIES
+       ══════════════════════════════════════════════════════════════════ */
+    .container { max-width: 1200px; margin: 0 auto; padding: 0 32px; }
+    .container-sm { max-width: 800px; margin: 0 auto; padding: 0 32px; }
+
+    .sr-only { position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0; }
+
+    /* Scroll reveal */
+    .reveal {
+      opacity: 0;
+      transform: translateY(40px);
+      transition: opacity 0.7s cubic-bezier(0.16,1,0.3,1), transform 0.7s cubic-bezier(0.16,1,0.3,1);
+    }
+    .reveal.visible { opacity: 1; transform: none; }
+    .reveal-delay-1 { transition-delay: 0.1s; }
+    .reveal-delay-2 { transition-delay: 0.2s; }
+    .reveal-delay-3 { transition-delay: 0.3s; }
+    .reveal-delay-4 { transition-delay: 0.4s; }
+
+    /* ══════════════════════════════════════════════════════════════════
+       NAV
+       ══════════════════════════════════════════════════════════════════ */
+    .nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 1000;
+      padding: 0 32px;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(2,11,24,0.7);
+      backdrop-filter: blur(24px) saturate(1.5);
+      -webkit-backdrop-filter: blur(24px) saturate(1.5);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      transition: background 0.3s;
+    }
+    .nav.scrolled { background: rgba(2,11,24,0.92); }
+    .nav-brand {
+      font-family: 'DM Serif Display', Georgia, serif;
+      font-size: 20px;
+      color: #fff;
+      text-decoration: none;
+      letter-spacing: -0.01em;
+    }
+    .nav-brand span { color: var(--accent-light); }
+    .nav-links { display: flex; align-items: center; gap: 32px; }
+    .nav-links a {
+      color: rgba(255,255,255,0.6);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      transition: color 0.2s;
+      letter-spacing: 0.01em;
+    }
+    .nav-links a:hover { color: #fff; }
+    .nav-cta {
+      padding: 9px 24px !important;
+      background: var(--accent-light) !important;
+      color: #fff !important;
+      border-radius: 8px;
+      font-weight: 600 !important;
+      transition: background 0.2s, transform 0.15s !important;
+    }
+    .nav-cta:hover { background: #4a9de0 !important; transform: translateY(-1px); }
+
+    .nav-mobile-toggle {
+      display: none;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 8px;
+    }
+    .nav-mobile-toggle span {
+      display: block;
+      width: 22px;
+      height: 2px;
+      background: #fff;
+      margin: 5px 0;
+      border-radius: 2px;
+      transition: 0.2s;
+    }
+
+    /* ══════════════════════════════════════════════════════════════════
+       HERO
+       ══════════════════════════════════════════════════════════════════ */
+    .hero {
+      position: relative;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      overflow: hidden;
+      background: linear-gradient(175deg, var(--ocean-1) 0%, var(--ocean-2) 25%, var(--ocean-3) 50%, var(--ocean-4) 75%, var(--ocean-5) 100%);
+    }
+
+    /* Noise grain */
+    .hero::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+      opacity: 0.03;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    /* Moon */
+    .hero-moon {
+      position: absolute;
+      top: 10%;
+      right: 12%;
+      width: 90px;
+      height: 90px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(255,255,255,0.95), rgba(200,220,255,0.3) 60%, transparent 70%);
+      box-shadow: 0 0 80px 30px rgba(180,210,255,0.15), 0 0 200px 80px rgba(100,170,255,0.06);
+      z-index: 2;
+      animation: moonFloat 12s ease-in-out infinite;
+    }
+    @keyframes moonFloat { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} }
+
+    /* Stars */
+    .stars-field { position: absolute; inset: 0; z-index: 1; }
+    .star {
+      position: absolute;
+      width: 2px; height: 2px;
+      background: #fff;
+      border-radius: 50%;
+      animation: twinkle var(--dur) ease-in-out infinite alternate;
+      opacity: 0;
+    }
+    @keyframes twinkle { from{opacity:0.1} to{opacity:var(--peak)} }
+
+    /* SVG Waves */
+    .wave-layer { position: absolute; bottom: 0; left: 0; width: 200%; z-index: 3; }
+    .wave-layer svg { display: block; width: 100%; height: auto; }
+    .wave-1 { bottom:-2px; animation:wD1 8s ease-in-out infinite; z-index:6; }
+    .wave-2 { bottom:18px; animation:wD2 10s ease-in-out infinite; z-index:5; opacity:0.7; }
+    .wave-3 { bottom:40px; animation:wD3 14s ease-in-out infinite; z-index:4; opacity:0.45; }
+    @keyframes wD1 { 0%,100%{transform:translateX(0)} 50%{transform:translateX(-12%)} }
+    @keyframes wD2 { 0%,100%{transform:translateX(-5%)} 50%{transform:translateX(5%)} }
+    @keyframes wD3 { 0%,100%{transform:translateX(3%)} 50%{transform:translateX(-8%)} }
+
+    /* Foam */
+    .foam-particles { position:absolute; bottom:60px; left:0; right:0; height:120px; z-index:7; pointer-events:none; overflow:hidden; }
+    .foam-dot {
+      position:absolute; width:var(--size); height:var(--size);
+      background:rgba(255,255,255,0.5); border-radius:50%; bottom:var(--y);
+      animation:foamFloat var(--dur) ease-in-out infinite; animation-delay:var(--delay); opacity:0;
+    }
+    @keyframes foamFloat {
+      0%{transform:translateX(0) translateY(0);opacity:0}
+      15%{opacity:0.6}
+      50%{transform:translateX(var(--dx)) translateY(-20px);opacity:0.3}
+      100%{transform:translateX(calc(var(--dx)*2)) translateY(5px);opacity:0}
+    }
+
+    .hero-inner {
+      position: relative;
+      z-index: 10;
+      width: 100%;
+      padding: 120px 32px 160px;
+      max-width: 1200px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 64px;
+      align-items: center;
+    }
+
+    .hero-text { max-width: 560px; }
+    .hero-eyebrow {
+      font-family: 'DM Mono', monospace;
+      font-size: 12px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: rgba(91,173,238,0.8);
+      margin-bottom: 20px;
+      animation: fadeUp 0.8s ease-out 0.2s both;
+    }
+    .hero-eyebrow .dot {
+      display: inline-block;
+      width: 6px; height: 6px;
+      background: #22a06b;
+      border-radius: 50%;
+      margin-right: 8px;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+    .hero h1 {
+      font-family: 'DM Serif Display', Georgia, serif;
+      font-size: clamp(38px, 5vw, 60px);
+      line-height: 1.06;
+      letter-spacing: -0.02em;
+      color: #fff;
+      margin-bottom: 24px;
+      animation: fadeUp 0.8s ease-out 0.35s both;
+    }
+    .hero h1 em {
+      font-style: italic;
+      background: linear-gradient(135deg, #5badee, #87d3f5, #5badee);
+      background-size: 200% 100%;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      animation: shimmer 6s ease-in-out infinite;
+    }
+    @keyframes shimmer { 0%,100%{background-position:0% 50%} 50%{background-position:100% 50%} }
+
+    .hero-desc {
+      font-size: 18px;
+      color: rgba(200,220,240,0.7);
+      font-weight: 300;
+      line-height: 1.75;
+      margin-bottom: 36px;
+      max-width: 480px;
+      animation: fadeUp 0.8s ease-out 0.5s both;
+    }
+
+    .hero-cta-row {
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+      align-items: center;
+      animation: fadeUp 0.8s ease-out 0.65s both;
+    }
+    .btn-hero {
+      padding: 14px 32px;
+      border-radius: 10px;
+      font-family: 'DM Sans', system-ui, sans-serif;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      text-decoration: none;
+      transition: all 0.25s;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .btn-primary-hero {
+      background: #5badee;
+      color: #fff;
+      box-shadow: 0 4px 24px rgba(91,173,238,0.35), 0 0 60px rgba(91,173,238,0.1);
+    }
+    .btn-primary-hero:hover { background:#4a9de0; transform:translateY(-2px); box-shadow:0 8px 32px rgba(91,173,238,0.4); }
+    .btn-ghost-hero {
+      background: rgba(255,255,255,0.08);
+      color: rgba(255,255,255,0.85);
+      border: 1px solid rgba(255,255,255,0.15);
+    }
+    .btn-ghost-hero:hover { background:rgba(255,255,255,0.14); color:#fff; }
+
+    .hero-social-proof {
+      margin-top: 48px;
+      animation: fadeUp 0.8s ease-out 0.85s both;
+    }
+    .hero-social-proof p {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.3);
+      margin-bottom: 16px;
+    }
+    .hero-avatars {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .avatar-stack {
+      display: flex;
+    }
+    .avatar-stack .av {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      border: 2px solid rgba(10,22,40,0.8);
+      margin-left: -10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      color: #fff;
+    }
+    .avatar-stack .av:first-child { margin-left: 0; }
+    .av-1 { background: linear-gradient(135deg, #5badee, #3d8fd9); }
+    .av-2 { background: linear-gradient(135deg, #22a06b, #1b8a5a); }
+    .av-3 { background: linear-gradient(135deg, #d97706, #c06600); }
+    .av-4 { background: linear-gradient(135deg, #9b59b6, #8e44ad); }
+    .av-5 { background: linear-gradient(135deg, #e05542, #c0392b); }
+    .hero-user-count {
+      font-size: 13px;
+      color: rgba(255,255,255,0.5);
+      font-weight: 400;
+    }
+    .hero-user-count strong { color: rgba(255,255,255,0.8); font-weight: 600; }
+
+    /* Floating product mockup */
+    .hero-visual {
+      position: relative;
+      animation: fadeUp 0.8s ease-out 0.5s both;
+    }
+    .hero-mockup {
+      position: relative;
+      background: rgba(10,22,40,0.6);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 16px;
+      padding: 24px;
+      animation: floatMockup 6s ease-in-out infinite;
+      box-shadow: 0 40px 80px rgba(0,0,0,0.3), 0 0 120px rgba(91,173,238,0.08);
+    }
+    @keyframes floatMockup { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-12px)} }
+
+    .mockup-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+    .mockup-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .mockup-status-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #22a06b;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    .mockup-status-text {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: #22a06b;
+      letter-spacing: 0.06em;
+    }
+    .mockup-time {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: rgba(255,255,255,0.3);
+    }
+
+    /* Animated progress ring */
+    .mockup-ring-wrap {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      margin-bottom: 24px;
+    }
+    .ring-container {
+      position: relative;
+      width: 100px;
+      height: 100px;
+      flex-shrink: 0;
+    }
+    .ring-svg { transform: rotate(-90deg); }
+    .ring-bg { fill: none; stroke: rgba(255,255,255,0.06); stroke-width: 6; }
+    .ring-fill {
+      fill: none;
+      stroke: var(--accent-light);
+      stroke-width: 6;
+      stroke-linecap: round;
+      stroke-dasharray: 283;
+      stroke-dashoffset: 283;
+      animation: ringFill 2s ease-out 1.2s forwards;
+    }
+    @keyframes ringFill { to { stroke-dashoffset: 62; } }
+    .ring-label {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    .ring-pct {
+      font-family: 'DM Serif Display', Georgia, serif;
+      font-size: 28px;
+      color: #fff;
+      line-height: 1;
+    }
+    .ring-sub {
+      font-family: 'DM Mono', monospace;
+      font-size: 9px;
+      color: rgba(255,255,255,0.4);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-top: 2px;
+    }
+
+    .mockup-stats { display: flex; flex-direction: column; gap: 8px; flex: 1; }
+    .mockup-stat {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      background: rgba(255,255,255,0.03);
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.04);
+    }
+    .mockup-stat-label { font-size: 12px; color: rgba(255,255,255,0.4); }
+    .mockup-stat-val { font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 500; }
+    .val-study { color: var(--accent-light); }
+    .val-dist { color: #e57373; }
+    .val-streak { color: var(--amber); }
+
+    /* Live activity bar */
+    .mockup-activity {
+      border-top: 1px solid rgba(255,255,255,0.06);
+      padding-top: 16px;
+    }
+    .activity-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.25);
+      margin-bottom: 10px;
+    }
+    .activity-bar {
+      height: 28px;
+      display: flex;
+      border-radius: 6px;
+      overflow: hidden;
+      gap: 2px;
+    }
+    .activity-seg {
+      border-radius: 4px;
+      animation: segGrow 0.6s ease-out backwards;
+    }
+    .seg-s { background: var(--accent-light); opacity: 0.8; }
+    .seg-d { background: #e57373; opacity: 0.6; }
+    .seg-s-bright { background: var(--accent-light); }
+
+    @keyframes segGrow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+
+    @keyframes fadeUp {
+      from { opacity:0; transform:translateY(32px); }
+      to   { opacity:1; transform:translateY(0); }
+    }
+
+    /* Bridge from hero */
+    .hero-bridge {
+      height: 100px;
+      background: linear-gradient(to bottom, var(--ocean-5), var(--bg));
+    }
+
+    /* ══════════════════════════════════════════════════════════════════
+       LOGOS BAR
+       ══════════════════════════════════════════════════════════════════ */
+    .logos-section {
+      padding: 48px 0;
+      border-bottom: 1px solid var(--border);
+      overflow: hidden;
+    }
+    .logos-label {
+      text-align: center;
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--ink-3);
+      margin-bottom: 28px;
+    }
+    .logos-track {
+      display: flex;
+      gap: 64px;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .logo-item {
+      font-family: 'DM Sans', system-ui, sans-serif;
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--ink-3);
+      opacity: 0.45;
+      transition: opacity 0.3s;
+      white-space: nowrap;
+      letter-spacing: -0.01em;
+    }
+    .logo-item:hover { opacity: 0.7; }
+
+    /* ══════════════════════════════════════════════════════════════════
+       SECTION PATTERN
+       ══════════════════════════════════════════════════════════════════ */
+    .section {
+      padding: 100px 0;
+    }
+    .section-header {
+      text-align: center;
+      max-width: 600px;
+      margin: 0 auto 60px;
+    }
+    .section-eyebrow {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 16px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .section-eyebrow::before {
+      content: '';
+      width: 24px;
+      height: 1px;
+      background: var(--accent);
+    }
+    .section-header h2 {
+      font-family: 'DM Serif Display', Georgia, serif;
+      font-size: clamp(30px, 4vw, 44px);
+      font-weight: 400;
+      line-height: 1.15;
+      letter-spacing: -0.015em;
+      margin-bottom: 16px;
+    }
+    .section-header p {
+      font-size: 17px;
+      color: var(--ink-2);
+      font-weight: 300;
+      line-height: 1.7;
+    }
+
+    /* ══════════════════════════════════════════════════════════════════
+       FEATURES GRID
+       ══════════════════════════════════════════════════════════════════ */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 2px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+    .feature-card {
+      background: var(--surface);
+      padding: 40px 32px;
+      transition: background 0.25s;
+      position: relative;
+      overflow: hidden;
+    }
+    .feature-card:hover { background: var(--surface-2); }
+    .feature-card::after {
+      content: '';
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 3px;
+      background: linear-gradient(90deg, var(--accent-light), transparent);
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    .feature-card:hover::after { opacity: 1; }
+
+    .feature-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      margin-bottom: 20px;
+      background: var(--accent-bg);
+    }
+    .feature-card h3 {
+      font-family: 'DM Serif Display', Georgia, serif;
+      font-size: 20px;
+      font-weight: 400;
+      margin-bottom: 10px;
+    }
+    .feature-card p {
+      font-size: 14px;
+      color: var(--ink-2);
+      line-height: 1.7;
+      font-weight: 300;
+    }
+
+    /* ══════════════════════════════════════════════════════════════════
+       ANIMATED SHOWCASE (How it works)
+       ══════════════════════════════════════════════════════════════════ */
+    .showcase-section {
+      background: var(--ocean-1);
+      color: #fff;
+      padding: 120px 0;
+      position: relative;
+      overflow: hidden;
+    }
+    .showcase-section::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse at 30% 50%, rgba(91,173,238,0.08) 0%, transparent 60%);
+      pointer-events: none;
+    }
+    .showcase-section .section-eyebrow { color: var(--accent-light); }
+    .showcase-section .section-eyebrow::before { background: var(--accent-light); }
+    .showcase-section .section-header p { color: rgba(200,220,240,0.6); }
+
+    .showcase-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 80px;
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+    .showcase-step {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 60px;
+      align-items: center;
+    }
+    .showcase-step:nth-child(even) { direction: rtl; }
+    .showcase-step:nth-child(even) > * { direction: ltr; }
+
+    .step-content {}
+    .step-number {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      color: var(--accent-light);
+      margin-bottom: 12px;
+    }
+    .step-content h3 {
+      font-family: 'DM Serif Display', Georgia, serif;
+      font-size: 28px;
+      font-weight: 400;
+      margin-bottom: 14px;
+      line-height: 1.2;
+    }
+    .step-content p {
+      font-size: 15px;
+      color: rgba(200,220,240,0.6);
+      line-height: 1.75;
+      font-weight: 300;
+    }
+
+    /* Animated illustrations */
+    .step-visual {
+      position: relative;
+      border-radius: 16px;
+      overflow: hidden;
+      aspect-ratio: 4/3;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+
+    /* Step 1 — Whitelist illustration */
+    .vis-whitelist {
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      justify-content: center;
+    }
+    .vis-wl-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      background: rgba(255,255,255,0.04);
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.06);
+      animation: wlSlide 0.5s ease-out backwards;
+    }
+    .vis-wl-item:nth-child(1) { animation-delay: 0.1s; }
+    .vis-wl-item:nth-child(2) { animation-delay: 0.2s; }
+    .vis-wl-item:nth-child(3) { animation-delay: 0.3s; }
+    .vis-wl-item:nth-child(4) { animation-delay: 0.4s; }
+    @keyframes wlSlide { from{opacity:0;transform:translateX(-16px)} to{opacity:1;transform:none} }
+    .vis-wl-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--accent-light);
+      flex-shrink: 0;
+    }
+    .vis-wl-domain {
+      font-family: 'DM Mono', monospace;
+      font-size: 13px;
+      color: rgba(255,255,255,0.7);
+    }
+    .vis-wl-tag {
+      margin-left: auto;
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.06em;
+      padding: 3px 10px;
+      border-radius: 20px;
+      background: rgba(91,173,238,0.15);
+      color: var(--accent-light);
+    }
+
+    /* Step 2 — Live tracking animation */
+    .vis-tracking {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      padding: 32px;
+    }
+    .vis-track-tabs {
+      display: flex;
+      gap: 8px;
+      width: 100%;
+    }
+    .vis-tab {
+      flex: 1;
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      text-align: center;
+      border: 1px solid rgba(255,255,255,0.06);
+      transition: all 0.4s;
+    }
+    .vis-tab-active {
+      background: rgba(91,173,238,0.15);
+      border-color: rgba(91,173,238,0.3);
+      color: var(--accent-light);
+      animation: tabPulse 3s ease-in-out infinite;
+    }
+    .vis-tab-idle {
+      background: rgba(255,255,255,0.02);
+      color: rgba(255,255,255,0.3);
+    }
+    @keyframes tabPulse { 0%,100%{box-shadow:0 0 0 0 rgba(91,173,238,0)} 50%{box-shadow:0 0 20px 4px rgba(91,173,238,0.15)} }
+
+    .vis-track-timeline {
+      width: 100%;
+      height: 40px;
+      display: flex;
+      gap: 3px;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .tl-seg {
+      border-radius: 4px;
+      animation: tlGrow 0.4s ease-out backwards;
+    }
+    .tl-s { background: var(--accent-light); opacity: 0.7; }
+    .tl-d { background: #e57373; opacity: 0.5; }
+
+    .vis-track-counter {
+      display: flex;
+      gap: 24px;
+    }
+    .vis-counter {
+      text-align: center;
+    }
+    .vis-counter-val {
+      font-family: 'DM Serif Display', Georgia, serif;
+      font-size: 24px;
+      color: #fff;
+    }
+    .vis-counter-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      color: rgba(255,255,255,0.3);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    /* Step 3 — Report card */
+    .vis-report {
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      justify-content: center;
+    }
+    .vis-report-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      background: rgba(255,255,255,0.03);
+      border-radius: 8px;
+    }
+    .vis-report-site {
+      font-family: 'DM Mono', monospace;
+      font-size: 12px;
+      color: rgba(255,255,255,0.5);
+    }
+    .vis-report-bar-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 1;
+      margin: 0 16px;
+    }
+    .vis-report-bar {
+      flex: 1;
+      height: 4px;
+      background: rgba(255,255,255,0.06);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .vis-report-bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      animation: barFill 1s ease-out backwards;
+    }
+    @keyframes barFill { from{width:0!important} }
+    .vis-report-time {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: rgba(255,255,255,0.4);
+      min-width: 40px;
+      text-align: right;
+    }
+
+    /* ══════════════════════════════════════════════════════════════════
+       KAI AI COACH SECTION
+       ══════════════════════════════════════════════════════════════════ */
+    .kai-section {
+      padding: 120px 0;
+      position: relative;
+      overflow: hidden;
+    }
+    .kai-section::before {
+      content: '';
+      position: absolute;
+      top: -200px; right: -200px;
+      width: 600px; height: 600px;
+      background: radial-gradient(circle, var(--accent-glow), transparent 70%);
+      pointer-events: none;
+    }
+
+    .kai-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 64px;
+      align-items: center;
+    }
+    .kai-chat-mockup {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.06);
+    }
+    .kai-chat-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .kai-avatar {
+      width: 36px; height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--accent-light), #3d8fd9);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      color: #fff;
+      flex-shrink: 0;
+    }
+    .kai-name {
+      font-weight: 600;
+      font-size: 14px;
+    }
+    .kai-subtitle {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: var(--ink-3);
+    }
+
+    .kai-chat-body {
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      min-height: 320px;
+    }
+    .kai-msg {
+      max-width: 85%;
+      padding: 12px 16px;
+      border-radius: 12px;
+      font-size: 13px;
+      line-height: 1.65;
+      animation: msgIn 0.4s ease-out backwards;
+    }
+    .kai-msg-ai {
+      background: var(--accent-bg);
+      color: var(--ink);
+      align-self: flex-start;
+      border-bottom-left-radius: 4px;
+    }
+    .kai-msg-user {
+      background: var(--accent);
+      color: #fff;
+      align-self: flex-end;
+      border-bottom-right-radius: 4px;
+    }
+    .kai-msg:nth-child(1) { animation-delay: 0.2s; }
+    .kai-msg:nth-child(2) { animation-delay: 0.8s; }
+    .kai-msg:nth-child(3) { animation-delay: 1.4s; }
+    .kai-msg:nth-child(4) { animation-delay: 2.0s; }
+    @keyframes msgIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:none} }
+
+    .kai-typing {
+      display: flex;
+      gap: 4px;
+      padding: 12px 16px;
+      align-self: flex-start;
+      animation: msgIn 0.4s ease-out 2.6s backwards;
+    }
+    .kai-typing-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--ink-3);
+      animation: typingBounce 1.4s ease-in-out infinite;
+    }
+    .kai-typing-dot:nth-child(2) { animation-delay: 0.15s; }
+    .kai-typing-dot:nth-child(3) { animation-delay: 0.3s; }
+    @keyframes typingBounce { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-6px)} }
+
+    .kai-actions {
+      padding: 12px 20px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .kai-action-btn {
+      padding: 7px 14px;
+      border-radius: 20px;
+      font-family: 'DM Sans', system-ui, sans-serif;
+      font-size: 12px;
+      font-weight: 500;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--ink-2);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .kai-action-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: var(--accent-bg);
+    }
+
+    .kai-info h3 {
+      font-family: 'DM Serif Display', Georgia, serif;
+      font-size: 22px;
+      font-weight: 400;
+      margin-bottom: 8px;
+    }
+    .kai-info > p {
+      font-size: 15px;
+      color: var(--ink-2);
+      line-height: 1.7;
+      font-weight: 300;
+      margin-bottom: 24px;
+    }
+    .kai-feature-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .kai-feature-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      font-size: 14px;
+      color: var(--ink-2);
+      line-height: 1.6;
+    }
+    .kai-feature-list .check {
+      width: 20px; height: 20px;
+      border-radius: 50%;
+      background: var(--accent-bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .kai-feature-list .check svg { width: 12px; height: 12px; }
+
+    /* ══════════════════════════════════════════════════════════════════
+       STATS BANNER
+       ══════════════════════════════════════════════════════════════════ */
+    .stats-banner {
+      background: var(--ocean-1);
+      padding: 60px 0;
+      overflow: hidden;
+      position: relative;
+    }
+    .stats-banner::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse at 70% 50%, rgba(91,173,238,0.06), transparent 60%);
+    }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 32px;
+      position: relative;
+    }
+    .stat-item { text-align: center; }
+    .stat-value {
+      font-family: 'DM Serif Display', Georgia, serif;
+      font-size: clamp(36px, 4vw, 52px);
+      color: #fff;
+      line-height: 1;
+      margin-bottom: 8px;
+    }
+    .stat-value span { color: var(--accent-light); }
+    .stat-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.35);
+    }
+
+    /* ══════════════════════════════════════════════════════════════════
+       TIDE LOOP SECTION
+       ══════════════════════════════════════════════════════════════════ */
+    .tide-section {
+      padding: 120px 0;
+      background: linear-gradient(175deg, #020b18 0%, #0a1628 50%, #0e2a4a 100%);
+      color: #fff;
+      position: relative;
+      overflow: hidden;
+    }
+    .tide-section::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse at 60% 30%, rgba(91,173,238,0.06), transparent 60%),
+                  radial-gradient(ellipse at 20% 80%, rgba(34,160,107,0.04), transparent 50%);
+      pointer-events: none;
+    }
+    .tide-section .section-eyebrow { color: var(--accent-light); }
+    .tide-section .section-eyebrow::before { background: var(--accent-light); }
+    .tide-section .section-header p { color: rgba(200,220,240,0.6); }
+
+    .tide-loop-visual {
+      max-width: 800px;
+      margin: 0 auto 64px;
+      position: relative;
+    }
+    .loop-ring {
+      display: flex;
+      justify-content: center;
+      gap: 0;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .loop-step-card {
+      flex: 1;
+      min-width: 160px;
+      max-width: 200px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 16px;
+      padding: 28px 20px;
+      text-align: center;
+      position: relative;
+      backdrop-filter: blur(8px);
+      transition: transform 0.3s, border-color 0.3s;
+    }
+    .loop-step-card:hover {
+      transform: translateY(-4px);
+      border-color: rgba(91,173,238,0.3);
+    }
+    .loop-step-num {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      color: var(--accent-light);
+      margin-bottom: 10px;
+      text-transform: uppercase;
+    }
+    .loop-step-icon {
+      font-size: 32px;
+      margin-bottom: 12px;
+      display: block;
+      animation: loopIconPulse 3s ease-in-out infinite;
+      animation-delay: var(--delay, 0s);
+    }
+    @keyframes loopIconPulse {
+      0%,100% { transform: scale(1); }
+      50% { transform: scale(1.1); }
+    }
+    .loop-step-card h4 {
+      font-family: 'DM Serif Display', Georgia, serif;
+      font-size: 17px;
+      font-weight: 400;
+      margin-bottom: 6px;
+    }
+    .loop-step-card p {
+      font-size: 12px;
+      color: rgba(200,220,240,0.5);
+      line-height: 1.6;
+      font-weight: 300;
+    }
+    .loop-arrow {
+      font-size: 24px;
+      color: rgba(91,173,238,0.3);
+      padding: 0 8px;
+      animation: arrowPulse 2s ease-in-out infinite;
+      flex-shrink: 0;
+    }
+    .loop-arrow:nth-of-type(2) { animation-delay: 0.5s; }
+    .loop-arrow:nth-of-type(3) { animation-delay: 1s; }
+    @keyframes arrowPulse {
+      0%,100% { opacity: 0.3; transform: translateX(0); }
+      50% { opacity: 0.8; transform: translateX(4px); }
+    }
+    .loop-return-arrow {
+      display: block;
+      text-align: center;
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: rgba(91,173,238,0.35);
+      margin-top: 20px;
+      letter-spacing: 0.08em;
+    }
+
+    .tide-features-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 2px;
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 16px;
+      overflow: hidden;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    .tide-feature {
+      background: rgba(255,255,255,0.03);
+      padding: 32px 28px;
+      transition: background 0.2s;
+    }
+    .tide-feature:hover { background: rgba(255,255,255,0.06); }
+    .tide-feature-icon {
+      font-size: 28px;
+      margin-bottom: 14px;
+      display: block;
+    }
+    .tide-feature h4 {
+      font-family: 'DM Serif Display', Georgia, serif;
+      font-size: 18px;
+      font-weight: 400;
+      margin-bottom: 8px;
+    }
+    .tide-feature p {
+      font-size: 13px;
+      color: rgba(200,220,240,0.5);
+      line-height: 1.7;
+      font-weight: 300;
+    }
+
+    /* ══════════════════════════════════════════════════════════════════
+       FOCUS ROOMS SECTION
+       ══════════════════════════════════════════════════════════════════ */
+    .rooms-section {
+      padding: 120px 0;
+      position: relative;
+      overflow: hidden;
+    }
+    .rooms-section::before {
+      content: '';
+      position: absolute;
+      top: -200px; left: -200px;
+      width: 600px; height: 600px;
+      background: radial-gradient(circle, rgba(34,160,107,0.06), transparent 70%);
+      pointer-events: none;
+    }
+    .rooms-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 48px;
+      align-items: center;
+    }
+    .rooms-mockup {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.06);
+    }
+    .rooms-mockup-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .rooms-mockup-title {
+      font-weight: 600;
+      font-size: 14px;
+    }
+    .rooms-mockup-live {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: #22a06b;
+    }
+    .rooms-live-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: #22a06b;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    .rooms-mockup-body {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .room-card-demo {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .room-card-demo:hover { border-color: var(--accent); background: var(--accent-bg); }
+    .room-card-info { display: flex; flex-direction: column; gap: 4px; }
+    .room-card-name { font-weight: 600; font-size: 14px; }
+    .room-card-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: var(--ink-3);
+    }
+    .room-card-meta .room-type-badge {
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 10px;
+      font-weight: 500;
+    }
+    .badge-sprint { background: rgba(217,119,6,0.1); color: var(--amber); }
+    .badge-focus { background: rgba(91,173,238,0.1); color: var(--accent); }
+    .badge-free { background: rgba(34,160,107,0.1); color: #22a06b; }
+    .room-card-avatars {
+      display: flex;
+    }
+    .room-av {
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      border: 2px solid var(--surface);
+      margin-left: -8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      color: #fff;
+      font-weight: 600;
+    }
+    .room-av:first-child { margin-left: 0; }
+
+    .rooms-info {
+      max-width: 460px;
+    }
+    .rooms-info h3 {
+      font-family: 'DM Serif Display', Georgia, serif;
+      font-size: 22px;
+      font-weight: 400;
+      margin-bottom: 8px;
+    }
+    .rooms-info > p {
+      font-size: 15px;
+      color: var(--ink-2);
+      line-height: 1.7;
+      font-weight: 300;
+      margin-bottom: 24px;
+    }
+    .rooms-perks {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .rooms-perks li {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      font-size: 14px;
+      color: var(--ink-2);
+      line-height: 1.6;
+    }
+    .rooms-perks .perk-dot {
+      width: 20px; height: 20px;
+      border-radius: 50%;
+      background: rgba(34,160,107,0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .rooms-perks .perk-dot svg { width: 12px; height: 12px; }
+
+    /* ══════════════════════════════════════════════════════════════════
+       PRICING
+       ══════════════════════════════════════════════════════════════════ */
+    .pricing-section {
+      padding: 120px 0;
+      background: var(--surface-2);
+    }
+    .pricing-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+    .pricing-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 40px 32px;
+      text-align: center;
+      position: relative;
+      transition: transform 0.3s, box-shadow 0.3s;
+    }
+    .pricing-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 20px 60px rgba(0,0,0,0.08);
+    }
+    .pricing-card.featured {
+      border-color: var(--accent-light);
+      box-shadow: 0 0 0 1px var(--accent-light), 0 20px 60px rgba(91,173,238,0.12);
+    }
+    .pricing-badge {
+      position: absolute;
+      top: -12px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 5px 16px;
+      background: var(--accent-light);
+      color: #fff;
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      border-radius: 20px;
+      font-weight: 500;
+    }
+    .pricing-name {
+      font-family: 'DM Serif Display', Georgia, serif;
+      font-size: 22px;
+      margin-bottom: 8px;
+    }
+    .pricing-desc {
+      font-size: 13px;
+      color: var(--ink-3);
+      margin-bottom: 24px;
+      font-weight: 300;
+    }
+    .pricing-price {
+      margin-bottom: 28px;
+    }
+    .pricing-amount {
+      font-family: 'DM Serif Display', Georgia, serif;
+      font-size: 48px;
+      line-height: 1;
+      letter-spacing: -0.02em;
+    }
+    .pricing-amount .currency { font-size: 24px; vertical-align: super; }
+    .pricing-period {
+      font-family: 'DM Mono', monospace;
+      font-size: 12px;
+      color: var(--ink-3);
+      margin-top: 4px;
+    }
+    .pricing-features {
+      list-style: none;
+      text-align: left;
+      margin-bottom: 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .pricing-features li {
+      font-size: 14px;
+      color: var(--ink-2);
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      line-height: 1.5;
+    }
+    .pricing-features .ico {
+      width: 18px;
+      height: 18px;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .pricing-features .ico-check { color: var(--green); }
+    .pricing-features .ico-x { color: var(--ink-3); opacity: 0.4; }
+
+    .btn-pricing {
+      width: 100%;
+      padding: 13px 24px;
+      border-radius: 10px;
+      font-family: 'DM Sans', system-ui, sans-serif;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s;
+    }
+    .btn-pricing-primary {
+      background: var(--accent-light);
+      color: #fff;
+      box-shadow: 0 4px 16px rgba(91,173,238,0.25);
+    }
+    .btn-pricing-primary:hover { background: #4a9de0; transform: translateY(-1px); }
+    .btn-pricing-ghost {
+      background: var(--surface);
+      color: var(--ink-2);
+      border: 1px solid var(--border);
+    }
+    .btn-pricing-ghost:hover { border-color: var(--ink-2); color: var(--ink); }
+
+    /* ══════════════════════════════════════════════════════════════════
+       TESTIMONIALS
+       ══════════════════════════════════════════════════════════════════ */
+    .testimonials-section { padding: 120px 0; }
+    .testimonials-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+    }
+    .testimonial-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 32px;
+      transition: transform 0.25s, box-shadow 0.25s;
+    }
+    .testimonial-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 16px 48px rgba(0,0,0,0.06);
+    }
+    .testimonial-stars {
+      display: flex;
+      gap: 2px;
+      margin-bottom: 16px;
+    }
+    .testimonial-stars svg { width: 16px; height: 16px; color: var(--amber); }
+    .testimonial-text {
+      font-size: 14px;
+      line-height: 1.75;
+      color: var(--ink-2);
+      margin-bottom: 20px;
+      font-weight: 300;
+      font-style: italic;
+    }
+    .testimonial-author {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .testimonial-av {
+      width: 40px; height: 40px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      color: #fff;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    .testimonial-name { font-size: 14px; font-weight: 600; }
+    .testimonial-role { font-size: 12px; color: var(--ink-3); }
+
+    /* ══════════════════════════════════════════════════════════════════
+       FAQ
+       ══════════════════════════════════════════════════════════════════ */
+    .faq-section {
+      padding: 120px 0;
+      background: var(--surface-2);
+    }
+    .faq-list {
+      max-width: 700px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+    .faq-item {
+      background: var(--surface);
+    }
+    .faq-q {
+      width: 100%;
+      padding: 22px 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-family: 'DM Sans', system-ui, sans-serif;
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--ink);
+      text-align: left;
+      transition: background 0.15s;
+    }
+    .faq-q:hover { background: var(--surface-2); }
+    .faq-chevron {
+      width: 20px; height: 20px;
+      color: var(--ink-3);
+      transition: transform 0.3s;
+      flex-shrink: 0;
+    }
+    .faq-item.open .faq-chevron { transform: rotate(180deg); }
+    .faq-a {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.35s ease, padding 0.35s ease;
+    }
+    .faq-item.open .faq-a {
+      max-height: 300px;
+    }
+    .faq-a-inner {
+      padding: 0 28px 22px;
+      font-size: 14px;
+      color: var(--ink-2);
+      line-height: 1.75;
+      font-weight: 300;
+    }
+
+    /* ══════════════════════════════════════════════════════════════════
+       FINAL CTA
+       ══════════════════════════════════════════════════════════════════ */
+    .cta-section {
+      position: relative;
+      padding: 120px 0;
+      background: linear-gradient(175deg, var(--ocean-1), var(--ocean-3));
+      text-align: center;
+      overflow: hidden;
+    }
+    .cta-section::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse at 50% 80%, rgba(91,173,238,0.12), transparent 60%);
+    }
+    .cta-inner {
+      position: relative;
+      z-index: 1;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+    .cta-inner h2 {
+      font-family: 'DM Serif Display', Georgia, serif;
+      font-size: clamp(32px, 4vw, 46px);
+      color: #fff;
+      margin-bottom: 16px;
+      line-height: 1.15;
+    }
+    .cta-inner p {
+      font-size: 17px;
+      color: rgba(200,220,240,0.6);
+      font-weight: 300;
+      line-height: 1.7;
+      margin-bottom: 36px;
+    }
+    .cta-buttons {
+      display: flex;
+      gap: 14px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    /* ══════════════════════════════════════════════════════════════════
+       FOOTER
+       ══════════════════════════════════════════════════════════════════ */
+    .footer {
+      background: var(--ocean-1);
+      border-top: 1px solid rgba(255,255,255,0.06);
+      padding: 48px 0;
+    }
+    .footer-inner {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .footer-brand {
+      font-family: 'DM Serif Display', Georgia, serif;
+      font-size: 18px;
+      color: rgba(255,255,255,0.6);
+    }
+    .footer-brand span { color: var(--accent-light); }
+    .footer-links {
+      display: flex;
+      gap: 24px;
+    }
+    .footer-links a {
+      font-size: 13px;
+      color: rgba(255,255,255,0.35);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    .footer-links a:hover { color: rgba(255,255,255,0.7); }
+    .footer-copy {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: rgba(255,255,255,0.2);
+      letter-spacing: 0.04em;
+    }
+
+    /* ══════════════════════════════════════════════════════════════════
+       ANIMATED FLOATING SHAPES (background decoration)
+       ══════════════════════════════════════════════════════════════════ */
+    .float-shapes {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      overflow: hidden;
+    }
+    .float-shape {
+      position: absolute;
+      border-radius: 50%;
+      opacity: 0.04;
+      background: var(--accent);
+      animation: floatShape var(--dur) ease-in-out infinite;
+    }
+    @keyframes floatShape {
+      0%,100% { transform: translate(0,0) scale(1); }
+      33% { transform: translate(var(--dx), var(--dy)) scale(1.1); }
+      66% { transform: translate(calc(var(--dx) * -0.5), calc(var(--dy) * 0.5)) scale(0.95); }
+    }
+
+    /* ══════════════════════════════════════════════════════════════════
+       RESPONSIVE
+       ══════════════════════════════════════════════════════════════════ */
+    @media (max-width: 900px) {
+      .hero-inner { grid-template-columns: 1fr; text-align: center; }
+      .hero-text { max-width: 100%; margin: 0 auto; }
+      .hero-desc { margin-left: auto; margin-right: auto; }
+      .hero-cta-row { justify-content: center; }
+      .hero-social-proof { display: flex; flex-direction: column; align-items: center; }
+      .hero-visual { max-width: 440px; margin: 0 auto; }
+
+      .features-grid { grid-template-columns: 1fr; }
+      .showcase-step { grid-template-columns: 1fr; gap: 32px; }
+      .showcase-step:nth-child(even) { direction: ltr; }
+
+      .kai-grid { grid-template-columns: 1fr; }
+      .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 24px; }
+      .tide-features-grid { grid-template-columns: 1fr; }
+      .loop-ring { gap: 16px; justify-content: center; }
+      .loop-arrow { display: none; }
+      .rooms-grid { grid-template-columns: 1fr; }
+      .pricing-grid { grid-template-columns: 1fr; max-width: 400px; }
+      .testimonials-grid { grid-template-columns: 1fr; }
+
+      .footer-inner { flex-direction: column; gap: 24px; text-align: center; }
+    }
+    @media (max-width: 600px) {
+      .nav-links { display: none; }
+      .nav-mobile-toggle { display: block; }
+      .container, .container-sm { padding: 0 20px; }
+      .section { padding: 72px 0; }
+      .hero-inner { padding: 100px 20px 140px; }
+      .hero-mockup { padding: 16px; }
+      .mockup-ring-wrap { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ═══ NAV ═══ -->
+  <nav class="nav" id="nav">
+    <a href="#" class="nav-brand">Tide<span>Track</span></a>
+    <div class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#tideloop">Tide Loop</a>
+      <a href="#rooms">Rooms</a>
+      <a href="#kai">Kai AI</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#cta" class="nav-cta">Get TideTrack Free</a>
+    </div>
+    <button class="nav-mobile-toggle" id="mobileToggle" aria-label="Toggle menu">
+      <span></span><span></span><span></span>
+    </button>
+  </nav>
+
+  <!-- ═══ HERO ═══ -->
+  <section class="hero">
+    <div class="hero-moon"></div>
+    <div class="stars-field" id="starsField"></div>
+    <div class="foam-particles" id="foamParticles"></div>
+
+    <div class="wave-layer wave-3">
+      <svg viewBox="0 0 2400 120" preserveAspectRatio="none"><path d="M0,60 C150,90 350,30 550,70 C750,110 950,40 1150,75 C1350,110 1550,35 1750,65 C1950,95 2150,45 2400,70 L2400,120 L0,120Z" fill="rgba(21,101,160,0.7)"/></svg>
+    </div>
+    <div class="wave-layer wave-2">
+      <svg viewBox="0 0 2400 100" preserveAspectRatio="none"><path d="M0,50 C180,80 360,20 540,55 C720,90 900,25 1080,60 C1260,95 1440,30 1620,55 C1800,80 1980,35 2160,60 C2340,85 2400,50 2400,50 L2400,100 L0,100Z" fill="rgba(26,111,181,0.85)"/></svg>
+    </div>
+    <div class="wave-layer wave-1">
+      <svg viewBox="0 0 2400 80" preserveAspectRatio="none"><path d="M0,35 C120,55 240,15 360,40 C480,65 600,20 720,45 C840,70 960,25 1080,45 C1200,65 1320,22 1440,42 C1560,62 1680,28 1800,48 C1920,68 2040,30 2160,45 C2280,60 2400,35 2400,35 L2400,80 L0,80Z" fill="#1565a0"/></svg>
+    </div>
+
+    <div class="hero-inner">
+      <div class="hero-text">
+        <p class="hero-eyebrow"><span class="dot"></span>Now tracking 2M+ study hours</p>
+        <h1>Know where your<br><em>time actually goes.</em></h1>
+        <p class="hero-desc">
+          The only study system that detects what you don't understand and forces you to fix it immediately.
+          Track focus, close knowledge gaps with AI, and study alongside others &mdash; all in one extension.
+        </p>
+        <div class="hero-cta-row">
+          <a href="#cta" class="btn-hero btn-primary-hero">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+            Add to Chrome &mdash; Free
+          </a>
+          <a href="#how" class="btn-hero btn-ghost-hero">See how it works</a>
+        </div>
+        <div class="hero-social-proof">
+          <p>Trusted by students at</p>
+          <div class="hero-avatars">
+            <div class="avatar-stack">
+              <div class="av av-1">M</div>
+              <div class="av av-2">S</div>
+              <div class="av av-3">J</div>
+              <div class="av av-4">A</div>
+              <div class="av av-5">K</div>
+            </div>
+            <span class="hero-user-count"><strong>12,400+</strong> students this semester</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="hero-visual">
+        <div class="hero-mockup">
+          <div class="mockup-header">
+            <div class="mockup-status">
+              <div class="mockup-status-dot"></div>
+              <span class="mockup-status-text">Studying</span>
+            </div>
+            <span class="mockup-time">Session: 2h 14m</span>
+          </div>
+          <div class="mockup-ring-wrap">
+            <div class="ring-container">
+              <svg class="ring-svg" width="100" height="100" viewBox="0 0 100 100">
+                <circle class="ring-bg" cx="50" cy="50" r="45"/>
+                <circle class="ring-fill" cx="50" cy="50" r="45"/>
+              </svg>
+              <div class="ring-label">
+                <span class="ring-pct">78%</span>
+                <span class="ring-sub">Focus</span>
+              </div>
+            </div>
+            <div class="mockup-stats">
+              <div class="mockup-stat">
+                <span class="mockup-stat-label">Study time</span>
+                <span class="mockup-stat-val val-study">2h 14m</span>
+              </div>
+              <div class="mockup-stat">
+                <span class="mockup-stat-label">Distracted</span>
+                <span class="mockup-stat-val val-dist">38m</span>
+              </div>
+              <div class="mockup-stat">
+                <span class="mockup-stat-label">Streak</span>
+                <span class="mockup-stat-val val-streak">7 days</span>
+              </div>
+            </div>
+          </div>
+          <div class="mockup-activity">
+            <p class="activity-label">Today's activity</p>
+            <div class="activity-bar">
+              <div class="activity-seg seg-s" style="flex:3;animation-delay:0.1s"></div>
+              <div class="activity-seg seg-d" style="flex:0.8;animation-delay:0.2s"></div>
+              <div class="activity-seg seg-s" style="flex:4;animation-delay:0.3s"></div>
+              <div class="activity-seg seg-d" style="flex:0.5;animation-delay:0.4s"></div>
+              <div class="activity-seg seg-s-bright" style="flex:2;animation-delay:0.5s"></div>
+              <div class="activity-seg seg-d" style="flex:0.3;animation-delay:0.6s"></div>
+              <div class="activity-seg seg-s" style="flex:3.5;animation-delay:0.7s"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="hero-bridge"></div>
+
+  <!-- ═══ LOGOS ═══ -->
+  <section class="logos-section">
+    <p class="logos-label">Trusted by students at top universities</p>
+    <div class="container">
+      <div class="logos-track">
+        <span class="logo-item">MIT</span>
+        <span class="logo-item">Stanford</span>
+        <span class="logo-item">NYU</span>
+        <span class="logo-item">UC Berkeley</span>
+        <span class="logo-item">Georgia Tech</span>
+        <span class="logo-item">U of Michigan</span>
+        <span class="logo-item">Columbia</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ FEATURES ═══ -->
+  <section class="section" id="features">
+    <div class="container">
+      <div class="section-header reveal">
+        <p class="section-eyebrow">Features</p>
+        <h2>Everything you need to study smarter.</h2>
+        <p>No manual timers. No complicated setup. Just install, add your study sites, and let TideTrack do the rest.</p>
+      </div>
+      <div class="features-grid">
+        <div class="feature-card reveal reveal-delay-1">
+          <div class="feature-icon">&#127919;</div>
+          <h3>Automatic tracking</h3>
+          <p>TideTrack watches your active tab and categorises time as study or distraction. No buttons to press, no timers to forget.</p>
+        </div>
+        <div class="feature-card reveal reveal-delay-2">
+          <div class="feature-icon">&#128202;</div>
+          <h3>Session reports</h3>
+          <p>End each session with a detailed breakdown: focus percentage, top distracting sites, study blocks, and personalised tips.</p>
+        </div>
+        <div class="feature-card reveal reveal-delay-3">
+          <div class="feature-icon">&#129302;</div>
+          <h3>Kai AI Coach</h3>
+          <p>Your personal AI study coach that reviews sessions, builds study plans, spots patterns, and gives you honest, data-driven advice.</p>
+        </div>
+        <div class="feature-card reveal reveal-delay-1">
+          <div class="feature-icon">&#128293;</div>
+          <h3>Streaks &amp; goals</h3>
+          <p>Set daily study goals and build streaks. Get notified when you hit your target. Gamification that actually works.</p>
+        </div>
+        <div class="feature-card reveal reveal-delay-2">
+          <div class="feature-icon">&#128274;</div>
+          <h3>Privacy first</h3>
+          <p>All data stays in your browser. No accounts required, no tracking pixels, no servers collecting your browsing data.</p>
+        </div>
+        <div class="feature-card reveal reveal-delay-3">
+          <div class="feature-icon">&#9889;</div>
+          <h3>Smart idle detection</h3>
+          <p>Walk away? TideTrack notices. Screen locked? Session pauses automatically. No inflated study hours.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ HOW IT WORKS ═══ -->
+  <section class="showcase-section" id="how">
+    <div class="container">
+      <div class="section-header reveal">
+        <p class="section-eyebrow">How it works</p>
+        <h2>Simple rules, running quietly.</h2>
+        <p>Three steps between you and honest study data.</p>
+      </div>
+
+      <div class="showcase-steps">
+        <!-- Step 1 -->
+        <div class="showcase-step reveal">
+          <div class="step-content">
+            <p class="step-number">Step 01</p>
+            <h3>Define your study spaces</h3>
+            <p>Add the domains you work on &mdash; Google Docs, Notion, your LMS. Time on these pages counts as focused study. Everything else is a distraction.</p>
+          </div>
+          <div class="step-visual vis-whitelist">
+            <div class="vis-wl-item">
+              <div class="vis-wl-dot"></div>
+              <span class="vis-wl-domain">docs.google.com</span>
+              <span class="vis-wl-tag">study</span>
+            </div>
+            <div class="vis-wl-item">
+              <div class="vis-wl-dot"></div>
+              <span class="vis-wl-domain">notion.so</span>
+              <span class="vis-wl-tag">study</span>
+            </div>
+            <div class="vis-wl-item">
+              <div class="vis-wl-dot"></div>
+              <span class="vis-wl-domain">canvas.instructure.com</span>
+              <span class="vis-wl-tag">study</span>
+            </div>
+            <div class="vis-wl-item">
+              <div class="vis-wl-dot"></div>
+              <span class="vis-wl-domain">github.com</span>
+              <span class="vis-wl-tag">study</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 2 -->
+        <div class="showcase-step reveal">
+          <div class="step-content">
+            <p class="step-number">Step 02</p>
+            <h3>Study while TideTrack watches</h3>
+            <p>A grace period prevents false alarms when you switch tabs. Stay on a distraction and the timer starts. Come back and it stops. Every second is logged.</p>
+          </div>
+          <div class="step-visual vis-tracking">
+            <div class="vis-track-tabs">
+              <div class="vis-tab vis-tab-active">docs.google.com</div>
+              <div class="vis-tab vis-tab-idle">youtube.com</div>
+              <div class="vis-tab vis-tab-idle">reddit.com</div>
+            </div>
+            <div class="vis-track-timeline">
+              <div class="tl-seg tl-s" style="flex:4;animation-delay:0.1s"></div>
+              <div class="tl-seg tl-d" style="flex:1;animation-delay:0.2s"></div>
+              <div class="tl-seg tl-s" style="flex:5;animation-delay:0.3s"></div>
+              <div class="tl-seg tl-d" style="flex:0.5;animation-delay:0.4s"></div>
+              <div class="tl-seg tl-s" style="flex:6;animation-delay:0.5s"></div>
+              <div class="tl-seg tl-d" style="flex:0.8;animation-delay:0.6s"></div>
+              <div class="tl-seg tl-s" style="flex:3;animation-delay:0.7s"></div>
+            </div>
+            <div class="vis-track-counter">
+              <div class="vis-counter">
+                <p class="vis-counter-val" style="color:var(--accent-light)">2h 14m</p>
+                <p class="vis-counter-label">Focused</p>
+              </div>
+              <div class="vis-counter">
+                <p class="vis-counter-val" style="color:#e57373">38m</p>
+                <p class="vis-counter-label">Off-task</p>
+              </div>
+              <div class="vis-counter">
+                <p class="vis-counter-val" style="color:#fff">78%</p>
+                <p class="vis-counter-label">Focus rate</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 3 -->
+        <div class="showcase-step reveal">
+          <div class="step-content">
+            <p class="step-number">Step 03</p>
+            <h3>Get your honest report</h3>
+            <p>Click "Done Studying" for a full breakdown. See exactly which sites stole your time, how long your focus blocks lasted, and what Kai recommends for next time.</p>
+          </div>
+          <div class="step-visual vis-report">
+            <div class="vis-report-row">
+              <span class="vis-report-site">youtube.com</span>
+              <div class="vis-report-bar-wrap">
+                <div class="vis-report-bar"><div class="vis-report-bar-fill" style="width:65%;background:#e57373;animation-delay:0.3s"></div></div>
+              </div>
+              <span class="vis-report-time">22m</span>
+            </div>
+            <div class="vis-report-row">
+              <span class="vis-report-site">reddit.com</span>
+              <div class="vis-report-bar-wrap">
+                <div class="vis-report-bar"><div class="vis-report-bar-fill" style="width:35%;background:#e57373;animation-delay:0.5s"></div></div>
+              </div>
+              <span class="vis-report-time">11m</span>
+            </div>
+            <div class="vis-report-row">
+              <span class="vis-report-site">twitter.com</span>
+              <div class="vis-report-bar-wrap">
+                <div class="vis-report-bar"><div class="vis-report-bar-fill" style="width:15%;background:#e57373;animation-delay:0.7s"></div></div>
+              </div>
+              <span class="vis-report-time">5m</span>
+            </div>
+            <div class="vis-report-row" style="margin-top:8px;background:rgba(91,173,238,0.08);border:1px solid rgba(91,173,238,0.15);border-radius:8px">
+              <span class="vis-report-site" style="color:var(--accent-light)">Kai says:</span>
+              <span class="vis-report-time" style="color:rgba(255,255,255,0.6);min-width:auto;font-size:12px">"Try blocking YouTube until 4pm"</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ STATS BANNER ═══ -->
+  <section class="stats-banner">
+    <div class="container">
+      <div class="stats-grid">
+        <div class="stat-item reveal">
+          <p class="stat-value">2<span>M+</span></p>
+          <p class="stat-label">Study hours tracked</p>
+        </div>
+        <div class="stat-item reveal reveal-delay-1">
+          <p class="stat-value">12<span>K+</span></p>
+          <p class="stat-label">Active students</p>
+        </div>
+        <div class="stat-item reveal reveal-delay-2">
+          <p class="stat-value">34<span>%</span></p>
+          <p class="stat-label">Avg. focus improvement</p>
+        </div>
+        <div class="stat-item reveal reveal-delay-3">
+          <p class="stat-value">4.9<span>/5</span></p>
+          <p class="stat-label">Chrome Web Store rating</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ TIDE LOOP ═══ -->
+  <section class="tide-section" id="tideloop">
+    <div class="container">
+      <div class="section-header reveal">
+        <p class="section-eyebrow">The Tide Loop</p>
+        <h2>Detect. Fix. Lock in.</h2>
+        <p>Most apps track tasks OR teach content OR motivate you. TideTrack does all three in a closed loop &mdash; the only system that detects what you don't understand and forces you to fix it immediately.</p>
+      </div>
+
+      <div class="tide-loop-visual reveal">
+        <div class="loop-ring">
+          <div class="loop-step-card">
+            <p class="loop-step-num">Step 1</p>
+            <span class="loop-step-icon" style="--delay:0s">&#128269;</span>
+            <h4>Detect</h4>
+            <p>Explain a concept in your own words. AI finds your gaps, misconceptions, and blind spots.</p>
+          </div>
+          <span class="loop-arrow">&#8594;</span>
+          <div class="loop-step-card">
+            <p class="loop-step-num">Step 2</p>
+            <span class="loop-step-icon" style="--delay:0.75s">&#9889;</span>
+            <h4>Trigger</h4>
+            <p>No "study later." A 5-minute fix session starts immediately. Timer counting down. No escape.</p>
+          </div>
+          <span class="loop-arrow">&#8594;</span>
+          <div class="loop-step-card">
+            <p class="loop-step-num">Step 3</p>
+            <span class="loop-step-icon" style="--delay:1.5s">&#128218;</span>
+            <h4>Fix</h4>
+            <p>AI gives you 1 explanation, 1 example, 1 question. Short, focused, no overwhelm.</p>
+          </div>
+          <span class="loop-arrow">&#8594;</span>
+          <div class="loop-step-card">
+            <p class="loop-step-num">Step 4</p>
+            <span class="loop-step-icon" style="--delay:2.25s">&#128274;</span>
+            <h4>Lock</h4>
+            <p>Session only completes when you answer correctly or explain it back clearly. Otherwise, loop repeats.</p>
+          </div>
+        </div>
+        <p class="loop-return-arrow">&#8592; Loop repeats until mastered &#8594;</p>
+      </div>
+
+      <div class="tide-features-grid reveal">
+        <div class="tide-feature">
+          <span class="tide-feature-icon">&#128200;</span>
+          <h4>Confusion Detection Feed</h4>
+          <p>Like a feed for your brain. Instead of a to-do list, see your weakest concepts ranked by confidence score. Know exactly what to fix next.</p>
+        </div>
+        <div class="tide-feature">
+          <span class="tide-feature-icon">&#9200;</span>
+          <h4>Forced Start Sessions</h4>
+          <p>5-minute minimum sessions with a countdown timer. No endless scrolling, no "I'll do it later." Gentle pressure through streaks and social visibility.</p>
+        </div>
+        <div class="tide-feature">
+          <span class="tide-feature-icon">&#127891;</span>
+          <h4>Explain-to-Learn AI</h4>
+          <p>Type or speak your explanation. AI scores clarity, accuracy, and missing ideas. The best way to learn is to teach &mdash; now you have someone to teach.</p>
+        </div>
+        <div class="tide-feature">
+          <span class="tide-feature-icon">&#128170;</span>
+          <h4>Momentum Score</h4>
+          <p>Forget grades. Track what actually matters: consistency, focus time, and concepts mastered. An addictive metric that rewards the process, not the outcome.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ FOCUS ROOMS ═══ -->
+  <section class="section rooms-section" id="rooms">
+    <div class="container">
+      <div class="section-header reveal">
+        <p class="section-eyebrow">Focus Rooms</p>
+        <h2>Study together. Stay accountable.</h2>
+        <p>Join live study sessions with other students. See who's focused, who's slacking, and push each other to stay on track.</p>
+      </div>
+
+      <div class="rooms-grid">
+        <div class="rooms-mockup reveal">
+          <div class="rooms-mockup-header">
+            <span class="rooms-mockup-title">Focus Rooms</span>
+            <span class="rooms-mockup-live"><span class="rooms-live-dot"></span> 847 studying now</span>
+          </div>
+          <div class="rooms-mockup-body">
+            <div class="room-card-demo">
+              <div class="room-card-info">
+                <span class="room-card-name">Calculus Sprint</span>
+                <div class="room-card-meta">
+                  <span class="room-type-badge badge-sprint">Sprint</span>
+                  <span>5 min</span>
+                  <span>&#183; 8/12</span>
+                </div>
+              </div>
+              <div class="room-card-avatars">
+                <div class="room-av" style="background:linear-gradient(135deg,#5badee,#3d8fd9)">A</div>
+                <div class="room-av" style="background:linear-gradient(135deg,#22a06b,#1b8a5a)">M</div>
+                <div class="room-av" style="background:linear-gradient(135deg,#d97706,#c06600)">K</div>
+              </div>
+            </div>
+            <div class="room-card-demo">
+              <div class="room-card-info">
+                <span class="room-card-name">CS Study Hall</span>
+                <div class="room-card-meta">
+                  <span class="room-type-badge badge-focus">Focus</span>
+                  <span>25 min</span>
+                  <span>&#183; 15/20</span>
+                </div>
+              </div>
+              <div class="room-card-avatars">
+                <div class="room-av" style="background:linear-gradient(135deg,#9b59b6,#8e44ad)">S</div>
+                <div class="room-av" style="background:linear-gradient(135deg,#e05542,#c0392b)">J</div>
+                <div class="room-av" style="background:linear-gradient(135deg,#5badee,#3d8fd9)">R</div>
+              </div>
+            </div>
+            <div class="room-card-demo">
+              <div class="room-card-info">
+                <span class="room-card-name">Essay Writing</span>
+                <div class="room-card-meta">
+                  <span class="room-type-badge badge-free">Free</span>
+                  <span>Open</span>
+                  <span>&#183; 4/10</span>
+                </div>
+              </div>
+              <div class="room-card-avatars">
+                <div class="room-av" style="background:linear-gradient(135deg,#22a06b,#1b8a5a)">L</div>
+                <div class="room-av" style="background:linear-gradient(135deg,#d97706,#c06600)">T</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="rooms-info reveal reveal-delay-2">
+          <div class="section-eyebrow">Your growth engine</div>
+          <h3>Body doubling, supercharged.</h3>
+          <p>Research shows that simply being around other people who are working makes you more productive. Focus Rooms bring that energy online &mdash; with AI-powered task assignments based on your weaknesses.</p>
+          <ul class="rooms-perks">
+            <li>
+              <span class="perk-dot"><svg viewBox="0 0 16 16" fill="none" stroke="#22a06b" stroke-width="2"><path d="M3 8.5l3 3 7-7.5"/></svg></span>
+              Join 5-min sprints, 25-min focus sessions, or open study halls
+            </li>
+            <li>
+              <span class="perk-dot"><svg viewBox="0 0 16 16" fill="none" stroke="#22a06b" stroke-width="2"><path d="M3 8.5l3 3 7-7.5"/></svg></span>
+              See who's active, who's idle, and who's crushing it
+            </li>
+            <li>
+              <span class="perk-dot"><svg viewBox="0 0 16 16" fill="none" stroke="#22a06b" stroke-width="2"><path d="M3 8.5l3 3 7-7.5"/></svg></span>
+              Kai assigns tasks based on your Tide Loop weak spots
+            </li>
+            <li>
+              <span class="perk-dot"><svg viewBox="0 0 16 16" fill="none" stroke="#22a06b" stroke-width="2"><path d="M3 8.5l3 3 7-7.5"/></svg></span>
+              Friendly post-session leaderboards drive healthy competition
+            </li>
+            <li>
+              <span class="perk-dot"><svg viewBox="0 0 16 16" fill="none" stroke="#22a06b" stroke-width="2"><path d="M3 8.5l3 3 7-7.5"/></svg></span>
+              Create private rooms for your study group or class
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ KAI AI COACH ═══ -->
+  <section class="section kai-section" id="kai">
+    <div class="container">
+      <div class="section-header reveal">
+        <p class="section-eyebrow">AI Study Coach</p>
+        <h2>Meet Kai, your personal study coach.</h2>
+        <p>Powered by Claude AI. Kai reviews your sessions, builds study plans, and gives honest, data-driven advice &mdash; right inside the extension.</p>
+      </div>
+      <div class="kai-grid">
+        <div class="kai-chat-mockup reveal">
+          <div class="kai-chat-header">
+            <div class="kai-avatar">K</div>
+            <div>
+              <p class="kai-name">Kai</p>
+              <p class="kai-subtitle">AI Study Coach</p>
+            </div>
+          </div>
+          <div class="kai-chat-body">
+            <div class="kai-msg kai-msg-user">How did my session go today?</div>
+            <div class="kai-msg kai-msg-ai">
+              Great session! You studied for <strong>2h 14m</strong> with a <strong>78% focus rate</strong>.
+              Your longest focus block was 47 minutes &mdash; that's up from 32 minutes yesterday.
+            </div>
+            <div class="kai-msg kai-msg-ai">
+              YouTube took 22 minutes. I noticed you always drift there around 3pm.
+              Try scheduling a 10-min break at 2:50 &mdash; it usually prevents the longer spiral.
+            </div>
+            <div class="kai-msg kai-msg-user">Build me a study plan for tomorrow</div>
+            <div class="kai-typing">
+              <div class="kai-typing-dot"></div>
+              <div class="kai-typing-dot"></div>
+              <div class="kai-typing-dot"></div>
+            </div>
+          </div>
+          <div class="kai-actions">
+            <button class="kai-action-btn">Review today</button>
+            <button class="kai-action-btn">Weekly summary</button>
+            <button class="kai-action-btn">Study plan</button>
+            <button class="kai-action-btn">My patterns</button>
+          </div>
+        </div>
+
+        <div class="kai-info reveal reveal-delay-2">
+          <div class="section-eyebrow">Powered by Claude</div>
+          <h3>Not a chatbot. A coach.</h3>
+          <p>Kai has full access to your study data. Every recommendation is backed by your real numbers &mdash; never generic advice.</p>
+          <ul class="kai-feature-list">
+            <li>
+              <span class="check"><svg viewBox="0 0 16 16" fill="none" stroke="var(--accent)" stroke-width="2"><path d="M3 8.5l3 3 7-7.5"/></svg></span>
+              Reviews each session and highlights what went well first
+            </li>
+            <li>
+              <span class="check"><svg viewBox="0 0 16 16" fill="none" stroke="var(--accent)" stroke-width="2"><path d="M3 8.5l3 3 7-7.5"/></svg></span>
+              Spots patterns like afternoon energy dips and recurring distractions
+            </li>
+            <li>
+              <span class="check"><svg viewBox="0 0 16 16" fill="none" stroke="var(--accent)" stroke-width="2"><path d="M3 8.5l3 3 7-7.5"/></svg></span>
+              Builds personalised study schedules based on your natural rhythm
+            </li>
+            <li>
+              <span class="check"><svg viewBox="0 0 16 16" fill="none" stroke="var(--accent)" stroke-width="2"><path d="M3 8.5l3 3 7-7.5"/></svg></span>
+              Remembers past sessions and tracks your improvement over time
+            </li>
+            <li>
+              <span class="check"><svg viewBox="0 0 16 16" fill="none" stroke="var(--accent)" stroke-width="2"><path d="M3 8.5l3 3 7-7.5"/></svg></span>
+              Limits advice to 2&ndash;3 actionable items, never overwhelming
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ PRICING ═══ -->
+  <section class="pricing-section" id="pricing">
+    <div class="container">
+      <div class="section-header reveal">
+        <p class="section-eyebrow">Pricing</p>
+        <h2>Start free. Upgrade when you're ready.</h2>
+        <p>Every plan includes the core tracking engine. Upgrade for AI coaching and advanced analytics.</p>
+      </div>
+      <div class="pricing-grid">
+        <!-- Free -->
+        <div class="pricing-card reveal reveal-delay-1">
+          <h3 class="pricing-name">Free</h3>
+          <p class="pricing-desc">For students getting started</p>
+          <div class="pricing-price">
+            <p class="pricing-amount"><span class="currency">$</span>0</p>
+            <p class="pricing-period">forever</p>
+          </div>
+          <ul class="pricing-features">
+            <li><svg class="ico ico-check" viewBox="0 0 20 20" fill="currentColor"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/></svg>Automatic tab tracking</li>
+            <li><svg class="ico ico-check" viewBox="0 0 20 20" fill="currentColor"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/></svg>Session reports &amp; history</li>
+            <li><svg class="ico ico-check" viewBox="0 0 20 20" fill="currentColor"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/></svg>Streaks &amp; daily goals</li>
+            <li><svg class="ico ico-check" viewBox="0 0 20 20" fill="currentColor"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/></svg>3 Tide Loop sessions / day</li>
+            <li><svg class="ico ico-check" viewBox="0 0 20 20" fill="currentColor"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/></svg>Join public Focus Rooms</li>
+            <li><svg class="ico ico-x" viewBox="0 0 20 20" fill="currentColor"><path d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"/></svg><span style="color:var(--ink-3)">Kai AI Coach</span></li>
+          </ul>
+          <button class="btn-pricing btn-pricing-ghost">Get started</button>
+        </div>
+
+        <!-- Pro -->
+        <div class="pricing-card featured reveal reveal-delay-2">
+          <div class="pricing-badge">Most popular</div>
+          <h3 class="pricing-name">Pro</h3>
+          <p class="pricing-desc">For serious students</p>
+          <div class="pricing-price">
+            <p class="pricing-amount"><span class="currency">$</span>6</p>
+            <p class="pricing-period">per month</p>
+          </div>
+          <ul class="pricing-features">
+            <li><svg class="ico ico-check" viewBox="0 0 20 20" fill="currentColor"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/></svg>Everything in Free</li>
+            <li><svg class="ico ico-check" viewBox="0 0 20 20" fill="currentColor"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/></svg><strong>Kai AI Coach</strong> &mdash; unlimited chats</li>
+            <li><svg class="ico ico-check" viewBox="0 0 20 20" fill="currentColor"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/></svg><strong>Unlimited Tide Loop</strong> sessions</li>
+            <li><svg class="ico ico-check" viewBox="0 0 20 20" fill="currentColor"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/></svg>Explain-to-Learn AI analysis</li>
+            <li><svg class="ico ico-check" viewBox="0 0 20 20" fill="currentColor"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/></svg>Create private Focus Rooms</li>
+            <li><svg class="ico ico-check" viewBox="0 0 20 20" fill="currentColor"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/></svg>Weekly pattern insights</li>
+            <li><svg class="ico ico-check" viewBox="0 0 20 20" fill="currentColor"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/></svg>Momentum Score &amp; progress tracking</li>
+          </ul>
+          <button class="btn-pricing btn-pricing-primary">Start 14-day free trial</button>
+        </div>
+
+        <!-- Team -->
+        <div class="pricing-card reveal reveal-delay-3">
+          <h3 class="pricing-name">Team</h3>
+          <p class="pricing-desc">For study groups &amp; tutors</p>
+          <div class="pricing-price">
+            <p class="pricing-amount"><span class="currency">$</span>16</p>
+            <p class="pricing-period">per month, up to 10 seats</p>
+          </div>
+          <ul class="pricing-features">
+            <li><svg class="ico ico-check" viewBox="0 0 20 20" fill="currentColor"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/></svg>Everything in Pro</li>
+            <li><svg class="ico ico-check" viewBox="0 0 20 20" fill="currentColor"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/></svg>Shared team dashboard</li>
+            <li><svg class="ico ico-check" viewBox="0 0 20 20" fill="currentColor"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/></svg>Group Tide Loop challenges</li>
+            <li><svg class="ico ico-check" viewBox="0 0 20 20" fill="currentColor"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/></svg>Tutor admin &amp; student reporting</li>
+            <li><svg class="ico ico-check" viewBox="0 0 20 20" fill="currentColor"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/></svg>Unlimited private Focus Rooms</li>
+            <li><svg class="ico ico-check" viewBox="0 0 20 20" fill="currentColor"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/></svg>Cross-device sync &amp; onboarding</li>
+          </ul>
+          <button class="btn-pricing btn-pricing-ghost">Contact us</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ TESTIMONIALS ═══ -->
+  <section class="testimonials-section">
+    <div class="container">
+      <div class="section-header reveal">
+        <p class="section-eyebrow">Testimonials</p>
+        <h2>Students love TideTrack.</h2>
+      </div>
+      <div class="testimonials-grid">
+        <div class="testimonial-card reveal reveal-delay-1">
+          <div class="testimonial-stars" aria-label="5 stars">
+            <svg viewBox="0 0 20 20" fill="currentColor"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+            <svg viewBox="0 0 20 20" fill="currentColor"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+            <svg viewBox="0 0 20 20" fill="currentColor"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+            <svg viewBox="0 0 20 20" fill="currentColor"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+            <svg viewBox="0 0 20 20" fill="currentColor"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+          </div>
+          <p class="testimonial-text">"I thought I was studying 6 hours a day. TideTrack showed me it was closer to 2.5. That was the wake-up call I needed. My GPA went up a full point this semester."</p>
+          <div class="testimonial-author">
+            <div class="testimonial-av" style="background:linear-gradient(135deg,#5badee,#3d8fd9)">M</div>
+            <div>
+              <p class="testimonial-name">Maya Chen</p>
+              <p class="testimonial-role">Pre-med, Stanford</p>
+            </div>
+          </div>
+        </div>
+        <div class="testimonial-card reveal reveal-delay-2">
+          <div class="testimonial-stars" aria-label="5 stars">
+            <svg viewBox="0 0 20 20" fill="currentColor"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+            <svg viewBox="0 0 20 20" fill="currentColor"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+            <svg viewBox="0 0 20 20" fill="currentColor"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+            <svg viewBox="0 0 20 20" fill="currentColor"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+            <svg viewBox="0 0 20 20" fill="currentColor"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+          </div>
+          <p class="testimonial-text">"Kai told me I always get distracted at 3pm and suggested scheduling a break at 2:50. I did, and my afternoon sessions went from 45% to 82% focus. This thing is magic."</p>
+          <div class="testimonial-author">
+            <div class="testimonial-av" style="background:linear-gradient(135deg,#22a06b,#1b8a5a)">J</div>
+            <div>
+              <p class="testimonial-name">James Okonkwo</p>
+              <p class="testimonial-role">CS Major, Georgia Tech</p>
+            </div>
+          </div>
+        </div>
+        <div class="testimonial-card reveal reveal-delay-3">
+          <div class="testimonial-stars" aria-label="5 stars">
+            <svg viewBox="0 0 20 20" fill="currentColor"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+            <svg viewBox="0 0 20 20" fill="currentColor"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+            <svg viewBox="0 0 20 20" fill="currentColor"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+            <svg viewBox="0 0 20 20" fill="currentColor"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+            <svg viewBox="0 0 20 20" fill="currentColor"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+          </div>
+          <p class="testimonial-text">"As a tutor, the Team plan is incredible. I can see which students are actually putting in the hours and who needs more support. The shared dashboard changed how I coach."</p>
+          <div class="testimonial-author">
+            <div class="testimonial-av" style="background:linear-gradient(135deg,#9b59b6,#8e44ad)">S</div>
+            <div>
+              <p class="testimonial-name">Sarah Kim</p>
+              <p class="testimonial-role">Graduate Tutor, NYU</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ FAQ ═══ -->
+  <section class="faq-section" id="faq">
+    <div class="container-sm">
+      <div class="section-header reveal">
+        <p class="section-eyebrow">FAQ</p>
+        <h2>Questions? We've got answers.</h2>
+      </div>
+      <div class="faq-list reveal">
+        <div class="faq-item">
+          <button class="faq-q" aria-expanded="false">
+            Is my browsing data sent anywhere?
+            <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div class="faq-a"><div class="faq-a-inner">No. All tracking data stays in your browser's local storage. We never collect, transmit, or sell your browsing data. The only external call is to the Claude API if you choose to use Kai, and that only sends your study stats &mdash; never URLs or page content.</div></div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-q" aria-expanded="false">
+            Do I need to start and stop a timer?
+            <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div class="faq-a"><div class="faq-a-inner">Nope. TideTrack runs automatically once installed. It detects when you're on a study site vs. a distraction site. When you walk away, idle detection pauses the session. Just click "Done Studying" when your session is over.</div></div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-q" aria-expanded="false">
+            What counts as a "study" site vs. a "distraction"?
+            <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div class="faq-a"><div class="faq-a-inner">You decide. Add domains to your whitelist (like docs.google.com, notion.so, your university LMS) and those count as study time. Everything else is flagged as a distraction. You can edit your list anytime.</div></div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-q" aria-expanded="false">
+            What is Kai and do I need an API key?
+            <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div class="faq-a"><div class="faq-a-inner">Kai is your AI study coach powered by Claude. On the Pro plan, Kai is included with unlimited conversations. On the Free plan, you can bring your own Anthropic API key to try it out. Kai reviews your sessions, builds study plans, and spots patterns in your data.</div></div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-q" aria-expanded="false">
+            Can I export my data?
+            <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div class="faq-a"><div class="faq-a-inner">Yes. Every plan includes CSV export. Download your complete session history anytime &mdash; dates, durations, URLs, focus percentages. Your data is yours.</div></div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-q" aria-expanded="false">
+            Does it work on Firefox or Safari?
+            <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div class="faq-a"><div class="faq-a-inner">TideTrack is currently Chrome-only (and works on all Chromium browsers like Edge, Brave, and Arc). Firefox and Safari versions are on the roadmap.</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ FINAL CTA ═══ -->
+  <section class="cta-section" id="cta">
+    <div class="cta-inner reveal">
+      <h2>Stop guessing. Start learning.<br>It's free.</h2>
+      <p>Join 12,000+ students using the Tide Loop to detect blind spots, fix them in 5 minutes, and actually retain what they study. Install in 10 seconds.</p>
+      <div class="cta-buttons">
+        <a href="#" class="btn-hero btn-primary-hero">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+          Add to Chrome &mdash; Free
+        </a>
+        <a href="#pricing" class="btn-hero btn-ghost-hero">View pricing</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ FOOTER ═══ -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-inner">
+        <span class="footer-brand">Tide<span>Track</span></span>
+        <div class="footer-links">
+          <a href="#features">Features</a>
+          <a href="#tideloop">Tide Loop</a>
+          <a href="#rooms">Focus Rooms</a>
+          <a href="#kai">Kai AI</a>
+          <a href="#pricing">Pricing</a>
+          <a href="#faq">FAQ</a>
+        </div>
+        <span class="footer-copy">&copy; 2026 TideTrack. All data stored locally.</span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ═══ SCRIPTS ═══ -->
+  <script>
+    /* Stars */
+    (function(){
+      var f=document.getElementById('starsField');
+      for(var i=0;i<70;i++){
+        var s=document.createElement('div');
+        s.className='star';
+        s.style.left=Math.random()*100+'%';
+        s.style.top=Math.random()*55+'%';
+        s.style.setProperty('--dur',(2+Math.random()*4)+'s');
+        s.style.setProperty('--peak',(0.3+Math.random()*0.7).toFixed(2));
+        s.style.animationDelay=(Math.random()*4)+'s';
+        if(Math.random()>0.7){s.style.width='3px';s.style.height='3px';}
+        f.appendChild(s);
+      }
+    })();
+
+    /* Foam */
+    (function(){
+      var c=document.getElementById('foamParticles');
+      for(var i=0;i<20;i++){
+        var f=document.createElement('div');
+        f.className='foam-dot';
+        f.style.left=Math.random()*100+'%';
+        f.style.setProperty('--size',(2+Math.random()*4)+'px');
+        f.style.setProperty('--y',Math.random()*80+'px');
+        f.style.setProperty('--dur',(3+Math.random()*5)+'s');
+        f.style.setProperty('--delay',(Math.random()*6)+'s');
+        f.style.setProperty('--dx',(-30+Math.random()*60)+'px');
+        c.appendChild(f);
+      }
+    })();
+
+    /* Scroll reveal */
+    (function(){
+      var obs=new IntersectionObserver(function(entries){
+        entries.forEach(function(e){
+          if(e.isIntersecting) e.target.classList.add('visible');
+        });
+      },{threshold:0.1});
+      document.querySelectorAll('.reveal').forEach(function(el){obs.observe(el);});
+    })();
+
+    /* Nav scroll effect */
+    (function(){
+      var nav=document.getElementById('nav');
+      window.addEventListener('scroll',function(){
+        nav.classList.toggle('scrolled',window.scrollY>50);
+      });
+    })();
+
+    /* FAQ accordion */
+    (function(){
+      document.querySelectorAll('.faq-q').forEach(function(btn){
+        btn.addEventListener('click',function(){
+          var item=this.parentElement;
+          var isOpen=item.classList.contains('open');
+          document.querySelectorAll('.faq-item.open').forEach(function(i){i.classList.remove('open');});
+          if(!isOpen) item.classList.add('open');
+        });
+      });
+    })();
+
+    /* Smooth scroll for anchor links */
+    document.querySelectorAll('a[href^="#"]').forEach(function(a){
+      a.addEventListener('click',function(e){
+        var target=document.querySelector(this.getAttribute('href'));
+        if(target){
+          e.preventDefault();
+          target.scrollIntoView({behavior:'smooth',block:'start'});
+        }
+      });
+    });
+  </script>
+</body>
+</html>
